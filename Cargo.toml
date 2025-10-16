@@ -10,4 +10,6 @@ proc-macro = true
 quote = "1.0.41"
 syn = "2.0.106"
 pandoc = "0.8.11"
+proc-macro2 = "1"
 threadpool = "1.8.1"
+tqdm = "0.8.0"
