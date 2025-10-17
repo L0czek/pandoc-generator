@@ -2,19 +2,29 @@ use std::{fs, io, path::PathBuf};
 
 pub(crate) enum TreeElement {
     File(PathBuf),
-    Nested(PathBuf, FsTree)
+    Nested(PathBuf, Vec<TreeElement>)
 }
 
 pub(crate) struct FsTree {
-    pub components: Vec<TreeElement>
+    pub tree: TreeElement
 }
 
 impl FsTree {
-    pub(crate) fn construct(rootdir: &PathBuf) -> Result<Self, io::Error> {
-        FsTree::make_tree(rootdir)
+    pub(crate) fn construct(rootdir: PathBuf) -> Result<Self, io::Error> {
+        if rootdir.is_file() {
+            Ok(Self {
+                tree: TreeElement::File(rootdir)
+            })
+        } else {
+            let components= FsTree::make_tree(&rootdir)?;
+
+            Ok(Self {
+                tree: TreeElement::Nested(rootdir, components)
+            })
+        }
     }
 
-    fn make_tree(dir: &PathBuf) -> Result<FsTree, io::Error> {
+    fn make_tree(dir: &PathBuf) -> Result<Vec<TreeElement>, io::Error> {
         let mut components = Vec::new();
 
         for entry in fs::read_dir(dir)? {
@@ -40,21 +50,27 @@ impl FsTree {
         });
 
 
-        Ok(FsTree { components })
+        Ok(components)
     }
 
-    fn list_files(&self, list: &mut Vec<PathBuf>) {
-        for el in self.components.iter() {
+    fn list_files(components: &[TreeElement], list: &mut Vec<PathBuf>) {
+        for el in components.iter() {
             match el {
                 TreeElement::File(path) => list.push(path.clone()),
-                TreeElement::Nested(_, tree) => tree.list_files(list),
+                TreeElement::Nested(_,subtree) =>
+                    Self::list_files(subtree, list),
             }
         }
     }
 
     pub(crate) fn get_all_src_files(&self) -> Vec<PathBuf> {
         let mut list = Vec::new();
-        self.list_files(&mut list);
+
+        match &self.tree {
+            TreeElement::File(path) => list.push(path.clone()),
+            TreeElement::Nested(_, components) => Self::list_files(components, &mut list),
+        }
+
         list
     }
 }
