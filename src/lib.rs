@@ -7,7 +7,6 @@ use generator::generate_content_tree;
 use options::Options;
 use pandoc::Pandoc;
 use proc_macro::TokenStream;
-use quote::quote;
 use syn::parse_macro_input;
 use threadpool::ThreadPool;
 use tqdm::tqdm;

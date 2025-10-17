@@ -1,5 +1,4 @@
 use proc_macro2::Span;
-use quote::quote;
 use syn::{
     braced,
     parse::{Parse, ParseStream},
@@ -213,17 +212,6 @@ pub fn parse_pandoc_options(tokens: proc_macro2::TokenStream) -> syn::Result<Vec
     }
 
     Ok(out)
-}
-
-/// Convert `Vec<PandocOption>` to token stream (for expansion)
-fn tokens_from_pandoc_option(opt: &PandocOption) -> proc_macro2::TokenStream {
-    match opt {
-        PandocOption::Strict => quote! { PandocOption::Strict },
-        PandocOption::ParseRaw => quote! { PandocOption::ParseRaw },
-        PandocOption::Smart => quote! { PandocOption::Smart },
-        PandocOption::Standalone => quote! { PandocOption::Standalone },
-        _ => quote! { compile_error!("Unsupported PandocOption for tokenization"); },
-    }
 }
 
 #[cfg(test)]

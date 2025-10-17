@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use pandoc::PandocOutput;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{token::Token, Ident};
+use syn::Ident;
 use crate::{tree::TreeElement, FsTree};
 
 pub(crate) fn generate_content_tree(name: Ident, tree: &FsTree, outputs: &HashMap<&&PathBuf, PandocOutput>) -> TokenStream {
