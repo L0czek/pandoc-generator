@@ -2,23 +2,32 @@ use std::{collections::HashMap, path::PathBuf};
 
 use pandoc::PandocOutput;
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use crate::{tree::TreeElement, Element, FsTree, Options};
+
+fn generate_option<T: ToTokens>(arg: &Option<T>) -> TokenStream {
+    match arg {
+        Some(v) => quote! { Some(#v) },
+        None => quote! { None }
+    }
+}
 
 pub(crate) fn generate_content_tree(options: &Options, trees: &[FsTree], outputs: &HashMap<&&PathBuf, PandocOutput>) -> TokenStream {
     let mod_name = &options.mod_name;
     let tree_name = &options.tree_name;
-    let subtrees= trees.iter().map(|i| process_tree_element(&i.tree, outputs)).collect::<Vec<TokenStream>>();
+    let subtrees= trees.iter().map(|i| process_tree_element(&i.tree, outputs, &i.route)).collect::<Vec<TokenStream>>();
 
     let mut component = Vec::new();
     let mut subtree_it = subtrees.into_iter();
     for element in options.content.iter() {
         match element {
-            Element::Special(s) => component.push(quote! {
-                ContentTree::Special { ty: #s }
+            Element::Special {
+                ty
+            } => component.push(quote! {
+                ContentTree::Special { ty: #ty }
             }),
 
-            Element::CompileFromPath(_) => {
+            Element::CompileFromPath { .. } => {
                 let code = subtree_it.next().unwrap();
 
                 component.push(code);
@@ -44,12 +53,14 @@ pub(crate) fn generate_content_tree(options: &Options, trees: &[FsTree], outputs
 
                 Html {
                     name: &'static str,
-                    content: &'static str
+                    content: &'static str,
+                    route: Option<&'static str>
                 },
 
                 Nested {
                     name: &'static str,
-                    elements: std::vec::Vec<ContentTree>
+                    elements: std::vec::Vec<ContentTree>,
+                    route: Option<&'static str>
                 }
             }
 
@@ -57,7 +68,8 @@ pub(crate) fn generate_content_tree(options: &Options, trees: &[FsTree], outputs
             lazy_static! {
                 pub(crate) static ref #tree_name: ContentTree = ContentTree::Nested {
                     name: "ROOT",
-                    elements: #content
+                    elements: #content,
+                    route: None
                 };
             }
         }
@@ -68,7 +80,8 @@ fn get_name(path: &PathBuf) -> String {
     path.file_name().unwrap().to_os_string().into_string().unwrap()
 }
 
-fn process_tree_element(tree: &TreeElement, outputs: &HashMap<&&PathBuf, PandocOutput>) -> TokenStream {
+fn process_tree_element(tree: &TreeElement, outputs: &HashMap<&&PathBuf, PandocOutput>, route: &Option<String>) -> TokenStream {
+    let route = generate_option(route);
     match tree {
         TreeElement::File(path) => {
             let name = get_name(path);
@@ -80,7 +93,8 @@ fn process_tree_element(tree: &TreeElement, outputs: &HashMap<&&PathBuf, PandocO
             quote! {
                 ContentTree::Html {
                     name: #name,
-                    content: #content
+                    content: #content,
+                    route: #route
                 }
             }
         },
@@ -92,7 +106,8 @@ fn process_tree_element(tree: &TreeElement, outputs: &HashMap<&&PathBuf, PandocO
             quote! {
                 ContentTree::Nested {
                     name: #name,
-                    elements: #content
+                    elements: #content,
+                    route: #route
                 }
             }
         }
@@ -101,7 +116,7 @@ fn process_tree_element(tree: &TreeElement, outputs: &HashMap<&&PathBuf, PandocO
 
 fn process_subtree_elements(tree: &[TreeElement], outputs: &HashMap<&&PathBuf, PandocOutput>) -> TokenStream {
     let components = tree.iter().map(|i| {
-        process_tree_element(i, outputs)
+        process_tree_element(i, outputs, &None)
     }).collect::<Vec<TokenStream>>();
 
     quote! {

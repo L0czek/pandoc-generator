@@ -17,20 +17,27 @@ mod keywords {
     custom_keyword!(content);
     custom_keyword!(compile_from_path);
     custom_keyword!(special);
+    custom_keyword!(path);
+    custom_keyword!(ty);
+    custom_keyword!(route);
 }
 
 pub(crate) enum Element {
-    CompileFromPath(String),
-    Special(String)
+    CompileFromPath {
+        path: String,
+        route: Option<String>
+    },
+
+    Special {
+        ty: String
+    }
 }
 
 impl Parse for Element {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let lookahead = input.lookahead1();
 
-        let parse_string_arg = |input: &syn::parse::ParseBuffer<'_>| {
-            let arg;
-            parenthesized!(arg in input);
+        let parse_string_arg = |arg: &syn::parse::ParseBuffer<'_>| {
             let expr = arg.parse::<ExprLit>();
 
             match expr {
@@ -50,12 +57,37 @@ impl Parse for Element {
 
         if lookahead.peek(keywords::special) {
             let _ = input.parse::<keywords::special>()?;
+            let arg;
+            parenthesized!(arg in input);
 
-            Ok(Element::Special(parse_string_arg(input)?))
+            let _ = arg.parse::<keywords::ty>()?;
+            let _ = arg.parse::<Token![:]>()?;
+            let ty = parse_string_arg(&arg)?;
+
+            Ok(Element::Special {
+                ty
+            })
         } else if lookahead.peek(keywords::compile_from_path) {
             let _ = input.parse::<keywords::compile_from_path>()?;
+            let arg;
+            parenthesized!(arg in input);
 
-            Ok(Element::CompileFromPath(parse_string_arg(input)?))
+            let _ = arg.parse::<keywords::path>()?;
+            let _ = arg.parse::<Token![:]>()?;
+            let path = parse_string_arg(&arg)?;
+
+            let route = if let Ok(_) = arg.parse::<Token![,]>() {
+                let _ = arg.parse::<keywords::route>()?;
+                let _ = arg.parse::<Token![:]>()?;
+                Some(parse_string_arg(&arg)?)
+            } else {
+                None
+            };
+
+            Ok(Element::CompileFromPath {
+                path,
+                route
+            })
         } else {
             Err(lookahead.error())
         }

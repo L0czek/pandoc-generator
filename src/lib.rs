@@ -27,8 +27,8 @@ pub fn pandoc_compile_html(items: TokenStream) -> TokenStream {
     let mut srcs = Vec::new();
 
     for element in options.content.iter() {
-        if let Element::CompileFromPath(path) = element {
-            let tree = FsTree::construct(PathBuf::from(path))
+        if let Element::CompileFromPath { path, route } = element {
+            let tree = FsTree::construct(PathBuf::from(path), route)
                     .expect(format!("Failed to explore dir {}", path).as_str());
             srcs.extend(tree.get_all_src_files().into_iter());
             trees.push(tree);
@@ -65,7 +65,7 @@ pub fn pandoc_compile_html(items: TokenStream) -> TokenStream {
     }
 
     let out = generate_content_tree(&options, &trees, &outputs).into();
-
+    println!("{}", out);
     out
 }
 

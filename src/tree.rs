@@ -6,20 +6,23 @@ pub(crate) enum TreeElement {
 }
 
 pub(crate) struct FsTree {
-    pub tree: TreeElement
+    pub tree: TreeElement,
+    pub route: Option<String>
 }
 
 impl FsTree {
-    pub(crate) fn construct(rootdir: PathBuf) -> Result<Self, io::Error> {
+    pub(crate) fn construct(rootdir: PathBuf, route: &Option<String>) -> Result<Self, io::Error> {
         if rootdir.is_file() {
             Ok(Self {
-                tree: TreeElement::File(rootdir)
+                tree: TreeElement::File(rootdir),
+                route: route.clone()
             })
         } else {
             let components= FsTree::make_tree(&rootdir)?;
 
             Ok(Self {
-                tree: TreeElement::Nested(rootdir, components)
+                tree: TreeElement::Nested(rootdir, components),
+                route: route.clone()
             })
         }
     }
