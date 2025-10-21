@@ -77,7 +77,23 @@ pub(crate) fn generate_content_tree(options: &Options, trees: &[FsTree], outputs
 }
 
 fn get_name(path: &PathBuf) -> String {
-    path.file_name().unwrap().to_os_string().into_string().unwrap()
+    // Get the file name as &str (panic if missing or invalid)
+    let file_name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .expect("Invalid or missing file name");
+
+    // Remove the extension (mandatory)
+    let name_without_extension = file_name
+        .split('.')
+        .next()
+        .expect("Missing name before extension");
+
+    // Extract part after the first '-' if present
+    match name_without_extension.split_once('-') {
+        Some((_prefix, middle)) => middle.to_string(),
+        None => name_without_extension.to_string(), // No dash found
+    }
 }
 
 fn process_tree_element(tree: &TreeElement, outputs: &HashMap<&&PathBuf, PandocOutput>, route: &Option<String>) -> TokenStream {
