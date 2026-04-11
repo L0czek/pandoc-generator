@@ -29,7 +29,7 @@ pub fn pandoc_compile_html(items: TokenStream) -> TokenStream {
     for element in options.content.iter() {
         if let Element::CompileFromPath { path, route } = element {
             let tree = FsTree::construct(PathBuf::from(path), route)
-                    .expect(format!("Failed to explore dir {}", path).as_str());
+                .expect(format!("Failed to explore dir {}", path).as_str());
             srcs.extend(tree.get_all_src_files().into_iter());
             trees.push(tree);
         }
@@ -42,10 +42,21 @@ pub fn pandoc_compile_html(items: TokenStream) -> TokenStream {
         let (tx, rx) = channel();
         let src_file = src.clone();
         let pandoc_options = options.pandoc_options.clone();
+        let input_format = options.input_format.clone();
+        let output_format = options.output_format.clone();
 
         pool.execute(move || {
             let mut pandoc = Pandoc::new();
             pandoc.add_options(&pandoc_options);
+
+            if let Some((fmt, exts)) = input_format {
+                pandoc.set_input_format(fmt, exts);
+            }
+
+            if let Some((fmt, exts)) = output_format {
+                pandoc.set_output_format(fmt, exts);
+            }
+
             pandoc.set_input(pandoc::InputKind::Files(vec![src_file]));
             pandoc.set_output(pandoc::OutputKind::Pipe);
             tx.send(pandoc.execute()).unwrap();
@@ -57,7 +68,8 @@ pub fn pandoc_compile_html(items: TokenStream) -> TokenStream {
     let mut outputs = HashMap::new();
     println!("Gathering results");
     for (path, rx) in tqdm(out.iter_mut()) {
-        let output= rx.recv()
+        let output = rx
+            .recv()
             .expect("Failed to read result from pandoc")
             .expect(format!("Pandoc failed to convert the file {:?}", path).as_str());
 
@@ -68,4 +80,3 @@ pub fn pandoc_compile_html(items: TokenStream) -> TokenStream {
     println!("{}", out);
     out
 }
-

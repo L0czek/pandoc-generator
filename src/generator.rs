@@ -1,29 +1,34 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use crate::{Element, FsTree, Options, tree::TreeElement};
 use pandoc::PandocOutput;
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
-use crate::{tree::TreeElement, Element, FsTree, Options};
+use quote::{ToTokens, quote};
 
 fn generate_option<T: ToTokens>(arg: &Option<T>) -> TokenStream {
     match arg {
         Some(v) => quote! { Some(#v) },
-        None => quote! { None }
+        None => quote! { None },
     }
 }
 
-pub(crate) fn generate_content_tree(options: &Options, trees: &[FsTree], outputs: &HashMap<&&PathBuf, PandocOutput>) -> TokenStream {
+pub(crate) fn generate_content_tree(
+    options: &Options,
+    trees: &[FsTree],
+    outputs: &HashMap<&&PathBuf, PandocOutput>,
+) -> TokenStream {
     let mod_name = &options.mod_name;
     let tree_name = &options.tree_name;
-    let subtrees= trees.iter().map(|i| process_tree_element(&i.tree, outputs, &i.route)).collect::<Vec<TokenStream>>();
+    let subtrees = trees
+        .iter()
+        .map(|i| process_tree_element(&i.tree, outputs, &i.route))
+        .collect::<Vec<TokenStream>>();
 
     let mut component = Vec::new();
     let mut subtree_it = subtrees.into_iter();
     for element in options.content.iter() {
         match element {
-            Element::Special {
-                ty
-            } => component.push(quote! {
+            Element::Special { ty } => component.push(quote! {
                 ContentTree::Special { ty: #ty }
             }),
 
@@ -31,7 +36,7 @@ pub(crate) fn generate_content_tree(options: &Options, trees: &[FsTree], outputs
                 let code = subtree_it.next().unwrap();
 
                 component.push(code);
-            },
+            }
         }
     }
 
@@ -96,14 +101,18 @@ fn get_name(path: &PathBuf) -> String {
     }
 }
 
-fn process_tree_element(tree: &TreeElement, outputs: &HashMap<&&PathBuf, PandocOutput>, route: &Option<String>) -> TokenStream {
+fn process_tree_element(
+    tree: &TreeElement,
+    outputs: &HashMap<&&PathBuf, PandocOutput>,
+    route: &Option<String>,
+) -> TokenStream {
     let route = generate_option(route);
     match tree {
         TreeElement::File(path) => {
             let name = get_name(path);
             let content = match outputs.get(&path).unwrap() {
                 PandocOutput::ToBuffer(output) => output,
-                _ => panic!("Pandoc didn't output to pipe?")
+                _ => panic!("Pandoc didn't output to pipe?"),
             };
 
             quote! {
@@ -113,7 +122,7 @@ fn process_tree_element(tree: &TreeElement, outputs: &HashMap<&&PathBuf, PandocO
                     route: #route
                 }
             }
-        },
+        }
 
         TreeElement::Nested(path, subtree) => {
             let name = get_name(path);
@@ -130,10 +139,14 @@ fn process_tree_element(tree: &TreeElement, outputs: &HashMap<&&PathBuf, PandocO
     }
 }
 
-fn process_subtree_elements(tree: &[TreeElement], outputs: &HashMap<&&PathBuf, PandocOutput>) -> TokenStream {
-    let components = tree.iter().map(|i| {
-        process_tree_element(i, outputs, &None)
-    }).collect::<Vec<TokenStream>>();
+fn process_subtree_elements(
+    tree: &[TreeElement],
+    outputs: &HashMap<&&PathBuf, PandocOutput>,
+) -> TokenStream {
+    let components = tree
+        .iter()
+        .map(|i| process_tree_element(i, outputs, &None))
+        .collect::<Vec<TokenStream>>();
 
     quote! {
         vec![

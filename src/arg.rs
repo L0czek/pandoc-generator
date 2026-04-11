@@ -1,12 +1,11 @@
 use proc_macro2::Span;
+use std::{fmt::Display, path::PathBuf};
+use syn::token::Brace;
 use syn::{
-    braced,
+    Expr, Ident, Token, braced,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    Expr, Ident, Token,
 };
-use syn::token::Brace;
-use std::{fmt::Display, path::PathBuf};
 
 // Replace this with the actual path to your crate defining PandocOption.
 use pandoc::{PandocOption, TrackChanges};
@@ -63,7 +62,8 @@ fn parse_string_arg(args: &[Expr], idx: usize) -> syn::Result<String> {
 
 /// Extract integer literal from expression
 fn parse_number_arg<T: std::str::FromStr>(args: &[Expr], idx: usize) -> syn::Result<T>
-    where <T as std::str::FromStr>::Err: Display
+where
+    <T as std::str::FromStr>::Err: Display,
 {
     if let Some(Expr::Lit(syn::ExprLit {
         lit: syn::Lit::Int(litint),
@@ -126,7 +126,7 @@ pub fn parse_pandoc_options(tokens: proc_macro2::TokenStream) -> syn::Result<Vec
                         return Err(syn::Error::new_spanned(
                             ident,
                             format!("Unsupported or unknown unit variant `{}`", name),
-                        ))
+                        ));
                     }
                 };
                 out.push(val);
@@ -137,51 +137,115 @@ pub fn parse_pandoc_options(tokens: proc_macro2::TokenStream) -> syn::Result<Vec
 
                 match name.as_str() {
                     // PathBuf/String options
-                    "DataDir" => out.push(PandocOption::DataDir(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "Defaults" => out.push(PandocOption::Defaults(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "BaseHeaderLevel" => out.push(PandocOption::BaseHeaderLevel(parse_number_arg::<u32>(&args, 0)?)),
-                    "ShiftHeadingLevelBy" => out.push(PandocOption::ShiftHeadingLevelBy(parse_number_arg::<i32>(&args, 0)?)),
-                    "IndentedCodeClasses" => out.push(PandocOption::IndentedCodeClasses(parse_string_arg(&args, 0)?)),
-                    "Filter" => out.push(PandocOption::Filter(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "LuaFilter" => out.push(PandocOption::LuaFilter(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "TabStop" => out.push(PandocOption::TabStop(parse_number_arg::<u32>(&args, 0)?)),
-                    "ExtractMedia" => out.push(PandocOption::ExtractMedia(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "Template" => out.push(PandocOption::Template(PathBuf::from(parse_string_arg(&args, 0)?))),
+                    "DataDir" => out.push(PandocOption::DataDir(PathBuf::from(parse_string_arg(
+                        &args, 0,
+                    )?))),
+                    "Defaults" => out.push(PandocOption::Defaults(PathBuf::from(
+                        parse_string_arg(&args, 0)?,
+                    ))),
+                    "ShiftHeadingLevelBy" => out.push(PandocOption::ShiftHeadingLevelBy(
+                        parse_number_arg::<i32>(&args, 0)?,
+                    )),
+                    "IndentedCodeClasses" => out.push(PandocOption::IndentedCodeClasses(
+                        parse_string_arg(&args, 0)?,
+                    )),
+                    "Filter" => out.push(PandocOption::Filter(PathBuf::from(parse_string_arg(
+                        &args, 0,
+                    )?))),
+                    "LuaFilter" => out.push(PandocOption::LuaFilter(PathBuf::from(
+                        parse_string_arg(&args, 0)?,
+                    ))),
+                    "TabStop" => {
+                        out.push(PandocOption::TabStop(parse_number_arg::<u32>(&args, 0)?))
+                    }
+                    "ExtractMedia" => out.push(PandocOption::ExtractMedia(PathBuf::from(
+                        parse_string_arg(&args, 0)?,
+                    ))),
+                    "Template" => out.push(PandocOption::Template(PathBuf::from(
+                        parse_string_arg(&args, 0)?,
+                    ))),
                     "Meta" => {
                         let key = parse_string_arg(&args, 0)?;
-                        let val = if args.len() > 1 { Some(parse_string_arg(&args, 1)?) } else { None };
+                        let val = if args.len() > 1 {
+                            Some(parse_string_arg(&args, 1)?)
+                        } else {
+                            None
+                        };
                         out.push(PandocOption::Meta(key, val));
                     }
                     "Var" => {
                         let key = parse_string_arg(&args, 0)?;
-                        let val = if args.len() > 1 { Some(parse_string_arg(&args, 1)?) } else { None };
+                        let val = if args.len() > 1 {
+                            Some(parse_string_arg(&args, 1)?)
+                        } else {
+                            None
+                        };
                         out.push(PandocOption::Var(key, val));
                     }
-                    "PrintDefaultTemplate" => out.push(PandocOption::PrintDefaultTemplate(parse_string_arg(&args, 0)?)),
-                    "PrintDefaultDataFile" => out.push(PandocOption::PrintDefaultDataFile(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "Columns" => out.push(PandocOption::Columns(parse_number_arg::<u32>(&args, 0)?)),
-                    "TableOfContentsDepth" => out.push(PandocOption::TableOfContentsDepth(parse_number_arg::<u32>(&args, 0)?)),
-                    "HighlightStyle" => out.push(PandocOption::HighlightStyle(parse_string_arg(&args, 0)?)),
-                    "IncludeInHeader" => out.push(PandocOption::IncludeInHeader(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "IncludeBeforeBody" => out.push(PandocOption::IncludeBeforeBody(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "IncludeAfterBody" => out.push(PandocOption::IncludeAfterBody(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "SlideLevel" => out.push(PandocOption::SlideLevel(parse_number_arg::<u32>(&args, 0)?)),
-                    "DefaultImageExtension" => out.push(PandocOption::DefaultImageExtension(parse_string_arg(&args, 0)?)),
+                    "PrintDefaultTemplate" => out.push(PandocOption::PrintDefaultTemplate(
+                        parse_string_arg(&args, 0)?,
+                    )),
+                    "PrintDefaultDataFile" => out.push(PandocOption::PrintDefaultDataFile(
+                        PathBuf::from(parse_string_arg(&args, 0)?),
+                    )),
+                    "Columns" => {
+                        out.push(PandocOption::Columns(parse_number_arg::<u32>(&args, 0)?))
+                    }
+                    "TableOfContentsDepth" => out.push(PandocOption::TableOfContentsDepth(
+                        parse_number_arg::<u32>(&args, 0)?,
+                    )),
+                    "HighlightStyle" => {
+                        out.push(PandocOption::HighlightStyle(parse_string_arg(&args, 0)?))
+                    }
+                    "IncludeInHeader" => out.push(PandocOption::IncludeInHeader(PathBuf::from(
+                        parse_string_arg(&args, 0)?,
+                    ))),
+                    "IncludeBeforeBody" => out.push(PandocOption::IncludeBeforeBody(
+                        PathBuf::from(parse_string_arg(&args, 0)?),
+                    )),
+                    "IncludeAfterBody" => out.push(PandocOption::IncludeAfterBody(PathBuf::from(
+                        parse_string_arg(&args, 0)?,
+                    ))),
+                    "SlideLevel" => {
+                        out.push(PandocOption::SlideLevel(parse_number_arg::<u32>(&args, 0)?))
+                    }
+                    "DefaultImageExtension" => out.push(PandocOption::DefaultImageExtension(
+                        parse_string_arg(&args, 0)?,
+                    )),
                     "IdPrefix" => out.push(PandocOption::IdPrefix(parse_string_arg(&args, 0)?)),
-                    "TitlePrefix" => out.push(PandocOption::TitlePrefix(parse_string_arg(&args, 0)?)),
-                    "PdfEngine" => out.push(PandocOption::PdfEngine(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "PdfEngineOpt" => out.push(PandocOption::PdfEngineOpt(parse_string_arg(&args, 0)?)),
-                    "Bibliography" => out.push(PandocOption::Bibliography(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "Csl" => out.push(PandocOption::Csl(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "CitationAbbreviations" => out.push(PandocOption::CitationAbbreviations(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "ReferenceDoc" => out.push(PandocOption::ReferenceDoc(PathBuf::from(parse_string_arg(&args, 0)?))),
-                    "EpubChapterLevel" => out.push(PandocOption::EpubChapterLevel(parse_number_arg::<u32>(&args, 0)?)),
+                    "TitlePrefix" => {
+                        out.push(PandocOption::TitlePrefix(parse_string_arg(&args, 0)?))
+                    }
+                    "PdfEngine" => out.push(PandocOption::PdfEngine(PathBuf::from(
+                        parse_string_arg(&args, 0)?,
+                    ))),
+                    "PdfEngineOpt" => {
+                        out.push(PandocOption::PdfEngineOpt(parse_string_arg(&args, 0)?))
+                    }
+                    "Bibliography" => out.push(PandocOption::Bibliography(PathBuf::from(
+                        parse_string_arg(&args, 0)?,
+                    ))),
+                    "Csl" => out.push(PandocOption::Csl(PathBuf::from(parse_string_arg(
+                        &args, 0,
+                    )?))),
+                    "CitationAbbreviations" => out.push(PandocOption::CitationAbbreviations(
+                        PathBuf::from(parse_string_arg(&args, 0)?),
+                    )),
+                    "ReferenceDoc" => out.push(PandocOption::ReferenceDoc(PathBuf::from(
+                        parse_string_arg(&args, 0)?,
+                    ))),
+                    "EpubChapterLevel" => out.push(PandocOption::EpubChapterLevel(
+                        parse_number_arg::<u32>(&args, 0)?,
+                    )),
                     "EOL" => out.push(PandocOption::EOL(parse_string_arg(&args, 0)?)),
 
                     // Enum-type args (simple fallback)
                     "TrackChanges" => {
                         if args.is_empty() {
-                            return Err(syn::Error::new_spanned(&ident, "TrackChanges requires one of Accept|Reject|All"));
+                            return Err(syn::Error::new_spanned(
+                                &ident,
+                                "TrackChanges requires one of Accept|Reject|All",
+                            ));
                         }
                         if let Expr::Path(p) = &args[0] {
                             if p.path.is_ident("Accept") {
@@ -203,7 +267,10 @@ pub fn parse_pandoc_options(tokens: proc_macro2::TokenStream) -> syn::Result<Vec
                     _ => {
                         return Err(syn::Error::new_spanned(
                             ident,
-                            format!("Variant `{}` with complex/custom type not yet supported", name),
+                            format!(
+                                "Variant `{}` with complex/custom type not yet supported",
+                                name
+                            ),
                         ));
                     }
                 }
@@ -267,7 +334,10 @@ mod tests {
     fn test_unknown_unit_variant_fails() {
         let input = quote! { Foo };
         let err = parse_pandoc_options(input).unwrap_err();
-        assert!(err.to_string().contains("Unsupported or unknown unit variant"));
+        assert!(
+            err.to_string()
+                .contains("Unsupported or unknown unit variant")
+        );
     }
 
     #[test]

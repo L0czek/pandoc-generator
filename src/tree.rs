@@ -2,12 +2,12 @@ use std::{fs, io, path::PathBuf};
 
 pub(crate) enum TreeElement {
     File(PathBuf),
-    Nested(PathBuf, Vec<TreeElement>)
+    Nested(PathBuf, Vec<TreeElement>),
 }
 
 pub(crate) struct FsTree {
     pub tree: TreeElement,
-    pub route: Option<String>
+    pub route: Option<String>,
 }
 
 impl FsTree {
@@ -15,14 +15,14 @@ impl FsTree {
         if rootdir.is_file() {
             Ok(Self {
                 tree: TreeElement::File(rootdir),
-                route: route.clone()
+                route: route.clone(),
             })
         } else {
-            let components= FsTree::make_tree(&rootdir)?;
+            let components = FsTree::make_tree(&rootdir)?;
 
             Ok(Self {
                 tree: TreeElement::Nested(rootdir, components),
-                route: route.clone()
+                route: route.clone(),
             })
         }
     }
@@ -43,15 +43,13 @@ impl FsTree {
         components.sort_by_key(|i| {
             let path = match i {
                 TreeElement::File(path) => path,
-                TreeElement::Nested(path, _) => path
+                TreeElement::Nested(path, _) => path,
             };
 
-            let index = path.iter().last().unwrap()
-                .to_str().unwrap();
+            let index = path.iter().last().unwrap().to_str().unwrap();
 
             index.to_owned()
         });
-
 
         Ok(components)
     }
@@ -60,8 +58,7 @@ impl FsTree {
         for el in components.iter() {
             match el {
                 TreeElement::File(path) => list.push(path.clone()),
-                TreeElement::Nested(_,subtree) =>
-                    Self::list_files(subtree, list),
+                TreeElement::Nested(_, subtree) => Self::list_files(subtree, list),
             }
         }
     }
