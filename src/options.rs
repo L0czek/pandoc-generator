@@ -6,6 +6,157 @@ use syn::{
 
 use crate::arg::parse_pandoc_options;
 
+/// Parse markdown extensions from a bracketed list
+fn parse_markdown_extensions(input: &syn::parse::ParseStream) -> syn::Result<Vec<MarkdownExtension>> {
+    let mut exts = Vec::new();
+    if input.peek(syn::token::Bracket) {
+        let ext_stream;
+        bracketed!(ext_stream in input);
+        let ids = Punctuated::<Ident, Token![,]>::parse_terminated(&ext_stream)?;
+        for id in ids.iter() {
+            let key = id.to_string().to_lowercase();
+            let ext = match key.as_str() {
+                "smart" => MarkdownExtension::Smart,
+                "attributes" => MarkdownExtension::Attributes,
+                "escaped_line_breaks" | "escapedlinebreaks" => MarkdownExtension::EscapedLineBreaks,
+                "blank_before_header" | "blankbeforeheader" => MarkdownExtension::BlankBeforeHeader,
+                "header_attributes" | "headerattributes" => MarkdownExtension::HeaderAttributes,
+                "auto_identifiers" | "autoidentifiers" => MarkdownExtension::AutoIdentifiers,
+                "implicit_header_references" | "implicitheaderreferences" => MarkdownExtension::ImplicitHeaderReferences,
+                "fenced_divs" | "fenceddivs" => MarkdownExtension::FencedDivs,
+                "fenced_code_blocks" | "fencedcodeblocks" => MarkdownExtension::FencedCodeBlocks,
+                "backtick_code_blocks" | "backtickcodeblocks" => MarkdownExtension::BacktickCodeBlocks,
+                "fenced_code_attributes" | "fencedcodeattributes" => MarkdownExtension::FencedCodeAttributes,
+                "line_blocks" | "lineblocks" => MarkdownExtension::LineBlocks,
+                "fancy_lists" | "fancylists" => MarkdownExtension::FancyLists,
+                "startnum" => MarkdownExtension::Startnum,
+                "task_lists" | "tasklists" => MarkdownExtension::TaskLists,
+                "definition_lists" | "definitionlists" => MarkdownExtension::DefinitionLists,
+                "example_lists" | "examplelists" => MarkdownExtension::ExampleLists,
+                "table_captions" | "tablecaptions" => MarkdownExtension::TableCaptions,
+                "simple_tables" | "simpletables" => MarkdownExtension::SimpleTables,
+                "multiline_tables" | "multilinetables" => MarkdownExtension::MultilineTables,
+                "grid_tables" | "gridtables" => MarkdownExtension::GridTables,
+                "pipe_tables" | "pipetables" => MarkdownExtension::PipeTables,
+                "pandoc_title_block" | "pandoctitleblock" => MarkdownExtension::PandocTitleBlock,
+                "yaml_metadata_block" | "yamlmetadatablock" => MarkdownExtension::YamlMetadataBlock,
+                "all_symbols_escapable" | "allsymbolsescapable" => MarkdownExtension::AllSymbolsEscapable,
+                "intraword_underscores" | "intrawordunderscores" => MarkdownExtension::IntrawordUnderscores,
+                "strikeout" => MarkdownExtension::Strikeout,
+                "superscript" => MarkdownExtension::Superscript,
+                "subscript" => MarkdownExtension::Subscript,
+                "inline_code_attributes" | "inlinecodeattributes" => MarkdownExtension::InlineCodeAttributes,
+                "tex_math_dollars" | "texmathdollars" => MarkdownExtension::TexMathDollars,
+                "raw_attribute" | "rawattribute" => MarkdownExtension::RawAttribute,
+                "raw_html" | "rawhtml" => MarkdownExtension::RawHtml,
+                "markdown_in_html_blocks" | "markdowninhtmlblocks" => MarkdownExtension::MarkdownInHtmlBlocks,
+                "native_divs" | "nativedivs" => MarkdownExtension::NativeDivs,
+                "native_spans" | "nativespans" => MarkdownExtension::NativeSpans,
+                "bracketed_spans" | "bracketedspans" => MarkdownExtension::BracketedSpans,
+                "raw_tex" | "rawtex" => MarkdownExtension::RawTex,
+                "latex_macros" | "latexmacros" => MarkdownExtension::LatexMacros,
+                "shortcut_reference_links" | "shortcutreferencelinks" => MarkdownExtension::ShortcutReferenceLinks,
+                "implicit_figures" | "implicitfigures" => MarkdownExtension::ImplicitFigures,
+                "footnotes" => MarkdownExtension::Footnotes,
+                "inline_notes" | "inlinenotes" => MarkdownExtension::InlineNotes,
+                "citations" => MarkdownExtension::Citations,
+                "lists_without_preceding_blankline" | "listswithoutprecedingblankline" => MarkdownExtension::ListsWithoutPrecedingBlankline,
+                "hard_line_breaks" | "hardlinebreaks" => MarkdownExtension::HardLineBreaks,
+                "ignore_line_breaks" | "ignorelinebreaks" => MarkdownExtension::IgnoreLineBreaks,
+                "tex_math_single_backslash" | "texmathsinglebackslash" => MarkdownExtension::TexMathSingleBackslash,
+                "tex_math_double_backslash" | "texmathdoublebackslash" => MarkdownExtension::TexMathDoubleBackslash,
+                "markdown_attribute" | "markdownattribute" => MarkdownExtension::MarkdownAttribute,
+                "mmd_title_block" | "mmdtitleblock" => MarkdownExtension::MmdTitleBlock,
+                "abbreviations" => MarkdownExtension::Abbreviations,
+                "autolink_bare_uris" | "autolinkbareuris" => MarkdownExtension::AutolinkBareUris,
+                "ascii_identifiers" | "asciidentifiers" => MarkdownExtension::AsciiIdentifiers,
+                "link_attributes" | "linkattributes" => MarkdownExtension::LinkAttributes,
+                "mmd_header_identifiers" | "mmdheaderidentifiers" => MarkdownExtension::MmdHeaderIdentifiers,
+                "compact_definition_lists" | "compactdefinitionlists" => MarkdownExtension::CompactDefinitionLists,
+                "rebase_relative_paths" | "rebaserelativepaths" => MarkdownExtension::RebaseRelativePaths,
+                other => MarkdownExtension::Other(other.to_string()),
+            };
+            exts.push(ext);
+        }
+    }
+    Ok(exts)
+}
+
+/// Parse an input format with optional extensions
+fn parse_input_format(input: syn::parse::ParseStream) -> syn::Result<(InputFormat, Vec<MarkdownExtension>)> {
+    let fmt_ident: Ident = input.parse()?;
+    let base = fmt_ident.to_string().to_lowercase();
+
+    let fmt = match base.as_str() {
+        "native" => InputFormat::Native,
+        "json" => InputFormat::Json,
+        "markdown" => InputFormat::Markdown,
+        "markdown_strict" => InputFormat::MarkdownStrict,
+        "markdown_phpextra" => InputFormat::MarkdownPhpextra,
+        "markdown_github" => InputFormat::MarkdownGithub,
+        "commonmark" => InputFormat::Commonmark,
+        "commonmark_x" | "commonmarkx" => InputFormat::CommonmarkX,
+        "textile" => InputFormat::Textile,
+        "rst" => InputFormat::Rst,
+        "rtf" => InputFormat::Rtf,
+        "html" => InputFormat::Html,
+        "docbook" => InputFormat::DocBook,
+        "t2t" => InputFormat::T2t,
+        "docx" => InputFormat::Docx,
+        "epub" => InputFormat::Epub,
+        "opml" => InputFormat::Opml,
+        "org" => InputFormat::Org,
+        "mediawiki" => InputFormat::MediaWiki,
+        "twiki" => InputFormat::Twiki,
+        "haddock" => InputFormat::Haddock,
+        "latex" => InputFormat::Latex,
+        other => InputFormat::Other(other.to_string()),
+    };
+
+    let exts = parse_markdown_extensions(&input)?;
+    Ok((fmt, exts))
+}
+
+/// Parse an output format with optional extensions
+fn parse_output_format(input: syn::parse::ParseStream) -> syn::Result<(OutputFormat, Vec<MarkdownExtension>)> {
+    let fmt_ident: Ident = input.parse()?;
+    let base = fmt_ident.to_string().to_lowercase();
+
+    let fmt = match base.as_str() {
+        "native" => OutputFormat::Native,
+        "json" => OutputFormat::Json,
+        "plain" => OutputFormat::Plain,
+        "markdown" => OutputFormat::Markdown,
+        "markdown_strict" => OutputFormat::MarkdownStrict,
+        "markdown_phpextra" => OutputFormat::MarkdownPhpextra,
+        "markdown_github" => OutputFormat::MarkdownGithub,
+        "commonmark" => OutputFormat::Commonmark,
+        "commonmark_x" | "commonmarkx" => OutputFormat::CommonmarkX,
+        "rst" => OutputFormat::Rst,
+        "html" => OutputFormat::Html,
+        "html5" => OutputFormat::Html5,
+        "latex" => OutputFormat::Latex,
+        "beamer" => OutputFormat::Beamer,
+        "context" => OutputFormat::Context,
+        "pdf" => OutputFormat::Pdf,
+        "man" => OutputFormat::Man,
+        "mediawiki" => OutputFormat::MediaWiki,
+        "dokuwiki" => OutputFormat::Dokuwiki,
+        "textile" => OutputFormat::Textile,
+        "org" => OutputFormat::Org,
+        "texinfo" => OutputFormat::Texinfo,
+        "opml" => OutputFormat::Opml,
+        "docbook" => OutputFormat::Docbook,
+        "open_document" | "opendocument" => OutputFormat::OpenDocument,
+        "odt" => OutputFormat::Odt,
+        "docx" => OutputFormat::Docx,
+        other => OutputFormat::Other(other.to_string()),
+    };
+
+    let exts = parse_markdown_extensions(&input)?;
+    Ok((fmt, exts))
+}
+
 mod keywords {
     use syn::custom_keyword;
 
@@ -95,398 +246,114 @@ pub(crate) struct Options {
 
 impl Parse for Options {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let _ = input.parse::<keywords::mod_name>()?;
-        let _ = input.parse::<Token![=]>()?;
-        let mod_name = input.parse::<Ident>()?;
-        let _ = input.parse::<Token![,]>()?;
+        // Parse arguments in any order
+        let mut mod_name: Option<Ident> = None;
+        let mut tree_name: Option<Ident> = None;
+        let mut content: Option<Punctuated<Element, Token![,]>> = None;
+        let mut input_format: Option<(InputFormat, Vec<MarkdownExtension>)> = None;
+        let mut output_format: Option<(OutputFormat, Vec<MarkdownExtension>)> = None;
+        let mut pandoc_options: Option<Vec<PandocOption>> = None;
+        let mut nproc: Option<usize> = None;
 
-        let _ = input.parse::<keywords::tree_name>()?;
-        let _ = input.parse::<Token![=]>()?;
-        let tree_name = input.parse::<Ident>()?;
-        let _ = input.parse::<Token![,]>()?;
+        // Helper function to parse format with extensions for input format
+        while !input.is_empty() {
+            let lookahead = input.lookahead1();
 
-        let _ = input.parse::<keywords::content>()?;
-        let _ = input.parse::<Token![=]>()?;
-        let elements_stream;
-        bracketed!(elements_stream in input);
-        let content = Punctuated::parse_separated_nonempty(&elements_stream)?;
-
-        let input_format: Option<(InputFormat, Vec<MarkdownExtension>)> = if input.peek(Token![,]) {
-            let _ = input.parse::<Token![,]>()?;
-
-            let _ = input.parse::<keywords::input_format>()?;
-            let _ = input.parse::<Token![=]>()?;
-
-            // parse base ident and optional bracketed extensions list, e.g. Markdown[Smart,Attributes]
-            let fmt_ident: Ident = input.parse()?;
-            let base = fmt_ident.to_string().to_lowercase();
-            let fmt = match base.as_str() {
-                "native" => InputFormat::Native,
-                "json" => InputFormat::Json,
-                "markdown" => InputFormat::Markdown,
-                "markdown_strict" => InputFormat::MarkdownStrict,
-                "markdown_phpextra" => InputFormat::MarkdownPhpextra,
-                "markdown_github" => InputFormat::MarkdownGithub,
-                "commonmark" => InputFormat::Commonmark,
-                "commonmark_x" | "commonmarkx" => InputFormat::CommonmarkX,
-                "textile" => InputFormat::Textile,
-                "rst" => InputFormat::Rst,
-                "rtf" => InputFormat::Rtf,
-                "html" => InputFormat::Html,
-                "docbook" => InputFormat::DocBook,
-                "t2t" => InputFormat::T2t,
-                "docx" => InputFormat::Docx,
-                "epub" => InputFormat::Epub,
-                "opml" => InputFormat::Opml,
-                "org" => InputFormat::Org,
-                "mediawiki" => InputFormat::MediaWiki,
-                "twiki" => InputFormat::Twiki,
-                "haddock" => InputFormat::Haddock,
-                "latex" => InputFormat::Latex,
-                other => InputFormat::Other(other.to_string()),
-            };
-
-            let mut exts = Vec::new();
-            if input.peek(syn::token::Bracket) {
-                let ext_stream;
-                bracketed!(ext_stream in input);
-                let ids = Punctuated::<Ident, Token![,]>::parse_terminated(&ext_stream)?;
-                for id in ids.iter() {
-                    let key = id.to_string().to_lowercase();
-                    let ext = match key.as_str() {
-                        "smart" => MarkdownExtension::Smart,
-                        "attributes" => MarkdownExtension::Attributes,
-                        "escaped_line_breaks" | "escapedlinebreaks" => {
-                            MarkdownExtension::EscapedLineBreaks
-                        }
-                        "blank_before_header" | "blankbeforeheader" => {
-                            MarkdownExtension::BlankBeforeHeader
-                        }
-                        "header_attributes" | "headerattributes" => {
-                            MarkdownExtension::HeaderAttributes
-                        }
-                        "auto_identifiers" | "autoidentifiers" => {
-                            MarkdownExtension::AutoIdentifiers
-                        }
-                        "implicit_header_references" | "implicitheaderreferences" => {
-                            MarkdownExtension::ImplicitHeaderReferences
-                        }
-                        "fenced_divs" | "fenceddivs" => MarkdownExtension::FencedDivs,
-                        "fenced_code_blocks" | "fencedcodeblocks" => {
-                            MarkdownExtension::FencedCodeBlocks
-                        }
-                        "backtick_code_blocks" | "backtickcodeblocks" => {
-                            MarkdownExtension::BacktickCodeBlocks
-                        }
-                        "fenced_code_attributes" | "fencedcodeattributes" => {
-                            MarkdownExtension::FencedCodeAttributes
-                        }
-                        "line_blocks" | "lineblocks" => MarkdownExtension::LineBlocks,
-                        "fancy_lists" | "fancylists" => MarkdownExtension::FancyLists,
-                        "startnum" => MarkdownExtension::Startnum,
-                        "task_lists" | "tasklists" => MarkdownExtension::TaskLists,
-                        "definition_lists" | "definitionlists" => {
-                            MarkdownExtension::DefinitionLists
-                        }
-                        "example_lists" | "examplelists" => MarkdownExtension::ExampleLists,
-                        "table_captions" | "tablecaptions" => MarkdownExtension::TableCaptions,
-                        "simple_tables" | "simpletables" => MarkdownExtension::SimpleTables,
-                        "multiline_tables" | "multilinetables" => {
-                            MarkdownExtension::MultilineTables
-                        }
-                        "grid_tables" | "gridtables" => MarkdownExtension::GridTables,
-                        "pipe_tables" | "pipetables" => MarkdownExtension::PipeTables,
-                        "pandoc_title_block" | "pandoctitleblock" => {
-                            MarkdownExtension::PandocTitleBlock
-                        }
-                        "yaml_metadata_block" | "yamlmetadatablock" => {
-                            MarkdownExtension::YamlMetadataBlock
-                        }
-                        "all_symbols_escapable" | "allsymbolsescapable" => {
-                            MarkdownExtension::AllSymbolsEscapable
-                        }
-                        "intraword_underscores" | "intrawordunderscores" => {
-                            MarkdownExtension::IntrawordUnderscores
-                        }
-                        "strikeout" => MarkdownExtension::Strikeout,
-                        "superscript" => MarkdownExtension::Superscript,
-                        "subscript" => MarkdownExtension::Subscript,
-                        "inline_code_attributes" | "inlinecodeattributes" => {
-                            MarkdownExtension::InlineCodeAttributes
-                        }
-                        "tex_math_dollars" | "texmathdollars" => MarkdownExtension::TexMathDollars,
-                        "raw_attribute" | "rawattribute" => MarkdownExtension::RawAttribute,
-                        "raw_html" | "rawhtml" => MarkdownExtension::RawHtml,
-                        "markdown_in_html_blocks" | "markdowninhtmlblocks" => {
-                            MarkdownExtension::MarkdownInHtmlBlocks
-                        }
-                        "native_divs" | "nativedivs" => MarkdownExtension::NativeDivs,
-                        "native_spans" | "nativespans" => MarkdownExtension::NativeSpans,
-                        "bracketed_spans" | "bracketedspans" => MarkdownExtension::BracketedSpans,
-                        "raw_tex" | "rawtex" => MarkdownExtension::RawTex,
-                        "latex_macros" | "latexmacros" => MarkdownExtension::LatexMacros,
-                        "shortcut_reference_links" | "shortcutreferencelinks" => {
-                            MarkdownExtension::ShortcutReferenceLinks
-                        }
-                        "implicit_figures" | "implicitfigures" => {
-                            MarkdownExtension::ImplicitFigures
-                        }
-                        "footnotes" => MarkdownExtension::Footnotes,
-                        "inline_notes" | "inlinenotes" => MarkdownExtension::InlineNotes,
-                        "citations" => MarkdownExtension::Citations,
-                        "lists_without_preceding_blankline" | "listswithoutprecedingblankline" => {
-                            MarkdownExtension::ListsWithoutPrecedingBlankline
-                        }
-                        "hard_line_breaks" | "hardlinebreaks" => MarkdownExtension::HardLineBreaks,
-                        "ignore_line_breaks" | "ignorelinebreaks" => {
-                            MarkdownExtension::IgnoreLineBreaks
-                        }
-                        "tex_math_single_backslash" | "texmathsinglebackslash" => {
-                            MarkdownExtension::TexMathSingleBackslash
-                        }
-                        "tex_math_double_backslash" | "texmathdoublebackslash" => {
-                            MarkdownExtension::TexMathDoubleBackslash
-                        }
-                        "markdown_attribute" | "markdownattribute" => {
-                            MarkdownExtension::MarkdownAttribute
-                        }
-                        "mmd_title_block" | "mmdtitleblock" => MarkdownExtension::MmdTitleBlock,
-                        "abbreviations" => MarkdownExtension::Abbreviations,
-                        "autolink_bare_uris" | "autolinkbareuris" => {
-                            MarkdownExtension::AutolinkBareUris
-                        }
-                        "ascii_identifiers" | "asciidentifiers" => {
-                            MarkdownExtension::AsciiIdentifiers
-                        }
-                        "link_attributes" | "linkattributes" => MarkdownExtension::LinkAttributes,
-                        "mmd_header_identifiers" | "mmdheaderidentifiers" => {
-                            MarkdownExtension::MmdHeaderIdentifiers
-                        }
-                        "compact_definition_lists" | "compactdefinitionlists" => {
-                            MarkdownExtension::CompactDefinitionLists
-                        }
-                        "rebase_relative_paths" | "rebaserelativepaths" => {
-                            MarkdownExtension::RebaseRelativePaths
-                        }
-                        other => MarkdownExtension::Other(other.to_string()),
-                    };
-                    exts.push(ext);
-                }
-            }
-
-            Some((fmt, exts))
-        } else {
-            None
-        };
-
-        let output_format: Option<(OutputFormat, Vec<MarkdownExtension>)> = if input.peek(Token![,])
-        {
-            let _ = input.parse::<Token![,]>()?;
-
-            let _ = input.parse::<keywords::output_format>()?;
-            let _ = input.parse::<Token![=]>()?;
-
-            // parse base ident and optional bracketed extensions list, e.g. Html[RawHtml]
-            let fmt_ident: Ident = input.parse()?;
-            let base = fmt_ident.to_string().to_lowercase();
-            let fmt = match base.as_str() {
-                "native" => OutputFormat::Native,
-                "json" => OutputFormat::Json,
-                "plain" => OutputFormat::Plain,
-                "markdown" => OutputFormat::Markdown,
-                "markdown_strict" => OutputFormat::MarkdownStrict,
-                "markdown_phpextra" => OutputFormat::MarkdownPhpextra,
-                "markdown_github" => OutputFormat::MarkdownGithub,
-                "commonmark" => OutputFormat::Commonmark,
-                "commonmark_x" | "commonmarkx" => OutputFormat::CommonmarkX,
-                "rst" => OutputFormat::Rst,
-                "html" => OutputFormat::Html,
-                "html5" => OutputFormat::Html5,
-                "latex" => OutputFormat::Latex,
-                "beamer" => OutputFormat::Beamer,
-                "context" => OutputFormat::Context,
-                "pdf" => OutputFormat::Pdf,
-                "man" => OutputFormat::Man,
-                "mediawiki" => OutputFormat::MediaWiki,
-                "dokuwiki" => OutputFormat::Dokuwiki,
-                "textile" => OutputFormat::Textile,
-                "org" => OutputFormat::Org,
-                "texinfo" => OutputFormat::Texinfo,
-                "opml" => OutputFormat::Opml,
-                "docbook" => OutputFormat::Docbook,
-                "open_document" | "opendocument" => OutputFormat::OpenDocument,
-                "odt" => OutputFormat::Odt,
-                "docx" => OutputFormat::Docx,
-                other => OutputFormat::Other(other.to_string()),
-            };
-
-            let mut exts = Vec::new();
-            if input.peek(syn::token::Bracket) {
-                let ext_stream;
-                bracketed!(ext_stream in input);
-                let ids = Punctuated::<Ident, Token![,]>::parse_terminated(&ext_stream)?;
-                for id in ids.iter() {
-                    let key = id.to_string().to_lowercase();
-                    let ext = match key.as_str() {
-                        "smart" => MarkdownExtension::Smart,
-                        "attributes" => MarkdownExtension::Attributes,
-                        "escaped_line_breaks" | "escapedlinebreaks" => {
-                            MarkdownExtension::EscapedLineBreaks
-                        }
-                        "blank_before_header" | "blankbeforeheader" => {
-                            MarkdownExtension::BlankBeforeHeader
-                        }
-                        "header_attributes" | "headerattributes" => {
-                            MarkdownExtension::HeaderAttributes
-                        }
-                        "auto_identifiers" | "autoidentifiers" => {
-                            MarkdownExtension::AutoIdentifiers
-                        }
-                        "implicit_header_references" | "implicitheaderreferences" => {
-                            MarkdownExtension::ImplicitHeaderReferences
-                        }
-                        "fenced_divs" | "fenceddivs" => MarkdownExtension::FencedDivs,
-                        "fenced_code_blocks" | "fencedcodeblocks" => {
-                            MarkdownExtension::FencedCodeBlocks
-                        }
-                        "backtick_code_blocks" | "backtickcodeblocks" => {
-                            MarkdownExtension::BacktickCodeBlocks
-                        }
-                        "fenced_code_attributes" | "fencedcodeattributes" => {
-                            MarkdownExtension::FencedCodeAttributes
-                        }
-                        "line_blocks" | "lineblocks" => MarkdownExtension::LineBlocks,
-                        "fancy_lists" | "fancylists" => MarkdownExtension::FancyLists,
-                        "startnum" => MarkdownExtension::Startnum,
-                        "task_lists" | "tasklists" => MarkdownExtension::TaskLists,
-                        "definition_lists" | "definitionlists" => {
-                            MarkdownExtension::DefinitionLists
-                        }
-                        "example_lists" | "examplelists" => MarkdownExtension::ExampleLists,
-                        "table_captions" | "tablecaptions" => MarkdownExtension::TableCaptions,
-                        "simple_tables" | "simpletables" => MarkdownExtension::SimpleTables,
-                        "multiline_tables" | "multilinetables" => {
-                            MarkdownExtension::MultilineTables
-                        }
-                        "grid_tables" | "gridtables" => MarkdownExtension::GridTables,
-                        "pipe_tables" | "pipetables" => MarkdownExtension::PipeTables,
-                        "pandoc_title_block" | "pandoctitleblock" => {
-                            MarkdownExtension::PandocTitleBlock
-                        }
-                        "yaml_metadata_block" | "yamlmetadatablock" => {
-                            MarkdownExtension::YamlMetadataBlock
-                        }
-                        "all_symbols_escapable" | "allsymbolsescapable" => {
-                            MarkdownExtension::AllSymbolsEscapable
-                        }
-                        "intraword_underscores" | "intrawordunderscores" => {
-                            MarkdownExtension::IntrawordUnderscores
-                        }
-                        "strikeout" => MarkdownExtension::Strikeout,
-                        "superscript" => MarkdownExtension::Superscript,
-                        "subscript" => MarkdownExtension::Subscript,
-                        "inline_code_attributes" | "inlinecodeattributes" => {
-                            MarkdownExtension::InlineCodeAttributes
-                        }
-                        "tex_math_dollars" | "texmathdollars" => MarkdownExtension::TexMathDollars,
-                        "raw_attribute" | "rawattribute" => MarkdownExtension::RawAttribute,
-                        "raw_html" | "rawhtml" => MarkdownExtension::RawHtml,
-                        "markdown_in_html_blocks" | "markdowninhtmlblocks" => {
-                            MarkdownExtension::MarkdownInHtmlBlocks
-                        }
-                        "native_divs" | "nativedivs" => MarkdownExtension::NativeDivs,
-                        "native_spans" | "nativespans" => MarkdownExtension::NativeSpans,
-                        "bracketed_spans" | "bracketedspans" => MarkdownExtension::BracketedSpans,
-                        "raw_tex" | "rawtex" => MarkdownExtension::RawTex,
-                        "latex_macros" | "latexmacros" => MarkdownExtension::LatexMacros,
-                        "shortcut_reference_links" | "shortcutreferencelinks" => {
-                            MarkdownExtension::ShortcutReferenceLinks
-                        }
-                        "implicit_figures" | "implicitfigures" => {
-                            MarkdownExtension::ImplicitFigures
-                        }
-                        "footnotes" => MarkdownExtension::Footnotes,
-                        "inline_notes" | "inlinenotes" => MarkdownExtension::InlineNotes,
-                        "citations" => MarkdownExtension::Citations,
-                        "lists_without_preceding_blankline" | "listswithoutprecedingblankline" => {
-                            MarkdownExtension::ListsWithoutPrecedingBlankline
-                        }
-                        "hard_line_breaks" | "hardlinebreaks" => MarkdownExtension::HardLineBreaks,
-                        "ignore_line_breaks" | "ignorelinebreaks" => {
-                            MarkdownExtension::IgnoreLineBreaks
-                        }
-                        "tex_math_single_backslash" | "texmathsinglebackslash" => {
-                            MarkdownExtension::TexMathSingleBackslash
-                        }
-                        "tex_math_double_backslash" | "texmathdoublebackslash" => {
-                            MarkdownExtension::TexMathDoubleBackslash
-                        }
-                        "markdown_attribute" | "markdownattribute" => {
-                            MarkdownExtension::MarkdownAttribute
-                        }
-                        "mmd_title_block" | "mmdtitleblock" => MarkdownExtension::MmdTitleBlock,
-                        "abbreviations" => MarkdownExtension::Abbreviations,
-                        "autolink_bare_uris" | "autolinkbareuris" => {
-                            MarkdownExtension::AutolinkBareUris
-                        }
-                        "ascii_identifiers" | "asciidentifiers" => {
-                            MarkdownExtension::AsciiIdentifiers
-                        }
-                        "link_attributes" | "linkattributes" => MarkdownExtension::LinkAttributes,
-                        "mmd_header_identifiers" | "mmdheaderidentifiers" => {
-                            MarkdownExtension::MmdHeaderIdentifiers
-                        }
-                        "compact_definition_lists" | "compactdefinitionlists" => {
-                            MarkdownExtension::CompactDefinitionLists
-                        }
-                        "rebase_relative_paths" | "rebaserelativepaths" => {
-                            MarkdownExtension::RebaseRelativePaths
-                        }
-                        other => MarkdownExtension::Other(other.to_string()),
-                    };
-                    exts.push(ext);
-                }
-            }
-
-            Some((fmt, exts))
-        } else {
-            None
-        };
-
-        let pandoc_options: Vec<PandocOption> = if input.peek(Token![,]) {
-            let _ = input.parse::<Token![,]>()?;
-
-            let _ = input.parse::<keywords::options>()?;
-            let _ = input.parse::<Token![=]>()?;
-
-            let option_stream;
-            bracketed!(option_stream in input);
-
-            parse_pandoc_options(option_stream.parse()?)?
-        } else {
-            vec![]
-        };
-
-        let nproc = if input.peek(Token![,]) {
-            let _ = input.parse::<Token![,]>()?;
-
-            let _ = input.parse::<keywords::nproc>()?;
-            let _ = input.parse::<Token![=]>()?;
-
-            let expr = input.parse::<ExprLit>()?;
-
-            match expr.lit {
-                Lit::Int(n) => n.base10_parse()?,
-                _ => {
+            if lookahead.peek(keywords::mod_name) {
+                if mod_name.is_some() {
                     return Err(syn::Error::new(
                         Span::call_site(),
-                        "nproc argument should be a number",
+                        "mod_name specified multiple times",
                     ));
                 }
+                let _ = input.parse::<keywords::mod_name>()?;
+                let _ = input.parse::<Token![=]>()?;
+                mod_name = Some(input.parse::<Ident>()?);
+            } else if lookahead.peek(keywords::tree_name) {
+                if tree_name.is_some() {
+                    return Err(syn::Error::new(
+                        Span::call_site(),
+                        "tree_name specified multiple times",
+                    ));
+                }
+                let _ = input.parse::<keywords::tree_name>()?;
+                let _ = input.parse::<Token![=]>()?;
+                tree_name = Some(input.parse::<Ident>()?);
+            } else if lookahead.peek(keywords::content) {
+                if content.is_some() {
+                    return Err(syn::Error::new(
+                        Span::call_site(),
+                        "content specified multiple times",
+                    ));
+                }
+                let _ = input.parse::<keywords::content>()?;
+                let _ = input.parse::<Token![=]>()?;
+                let elements_stream;
+                bracketed!(elements_stream in input);
+                content = Some(Punctuated::parse_separated_nonempty(&elements_stream)?);
+            } else if lookahead.peek(keywords::input_format) {
+                if input_format.is_some() {
+                    return Err(syn::Error::new(
+                        Span::call_site(),
+                        "input_format specified multiple times",
+                    ));
+                }
+                let _ = input.parse::<keywords::input_format>()?;
+                let _ = input.parse::<Token![=]>()?;
+                input_format = Some(parse_input_format(input)?);
+            } else if lookahead.peek(keywords::output_format) {
+                if output_format.is_some() {
+                    return Err(syn::Error::new(
+                        Span::call_site(),
+                        "output_format specified multiple times",
+                    ));
+                }
+                let _ = input.parse::<keywords::output_format>()?;
+                let _ = input.parse::<Token![=]>()?;
+                output_format = Some(parse_output_format(input)?);
+            } else if lookahead.peek(keywords::options) {
+                if pandoc_options.is_some() {
+                    return Err(syn::Error::new(
+                        Span::call_site(),
+                        "options specified multiple times",
+                    ));
+                }
+                let _ = input.parse::<keywords::options>()?;
+                let _ = input.parse::<Token![=]>()?;
+                let option_stream;
+                bracketed!(option_stream in input);
+                pandoc_options = Some(parse_pandoc_options(option_stream.parse()?)?);
+            } else if lookahead.peek(keywords::nproc) {
+                if nproc.is_some() {
+                    return Err(syn::Error::new(
+                        Span::call_site(),
+                        "nproc specified multiple times",
+                    ));
+                }
+                let _ = input.parse::<keywords::nproc>()?;
+                let _ = input.parse::<Token![=]>()?;
+                let expr = input.parse::<ExprLit>()?;
+                match expr.lit {
+                    Lit::Int(n) => nproc = Some(n.base10_parse()?),
+                    _ => {
+                        return Err(syn::Error::new(
+                            Span::call_site(),
+                            "nproc argument should be a number",
+                        ));
+                    }
+                }
+            } else {
+                return Err(lookahead.error());
             }
-        } else {
-            1
-        };
+
+            // Parse optional comma separator
+            let _ = input.parse::<Token![,]>();
+        }
+
+        // Validate required arguments
+        let mod_name = mod_name.ok_or_else(|| syn::Error::new(Span::call_site(), "mod_name is required"))?;
+        let tree_name = tree_name.ok_or_else(|| syn::Error::new(Span::call_site(), "tree_name is required"))?;
+        let content = content.ok_or_else(|| syn::Error::new(Span::call_site(), "content is required"))?;
 
         Ok(Self {
             mod_name,
@@ -494,8 +361,8 @@ impl Parse for Options {
             content,
             input_format,
             output_format,
-            pandoc_options,
-            nproc,
+            pandoc_options: pandoc_options.unwrap_or_default(),
+            nproc: nproc.unwrap_or(1),
         })
     }
 }
