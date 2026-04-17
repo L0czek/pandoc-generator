@@ -17,6 +17,8 @@ mod generator;
 mod options;
 mod tree;
 
+const MOD_FILE_PREFIX: &str = "__mod__";
+
 #[proc_macro]
 pub fn pandoc_compile_html(items: TokenStream) -> TokenStream {
     let options: Options = parse_macro_input!(items);
@@ -25,10 +27,12 @@ pub fn pandoc_compile_html(items: TokenStream) -> TokenStream {
 
     let mut trees = Vec::new();
     let mut srcs = Vec::new();
+    let mod_file_name = options.source_ext.as_ref()
+        .map_or(MOD_FILE_PREFIX.to_string(), |i| format!("{}.{}", MOD_FILE_PREFIX, i));
 
     for element in options.content.iter() {
         if let Element::CompileFromPath { path, route } = element {
-            let tree = FsTree::construct(PathBuf::from(path), route)
+            let tree = FsTree::construct(PathBuf::from(path), route, &mod_file_name, &options.source_ext)
                 .expect(format!("Failed to explore dir {}", path).as_str());
             srcs.extend(tree.get_all_src_files().into_iter());
             trees.push(tree);

@@ -101,6 +101,20 @@ fn get_name(path: &PathBuf) -> String {
     }
 }
 
+fn get_mod_name(path: &PathBuf) -> String {
+    // For ModFile, the name comes from the parent directory
+    let parent = path
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|s| s.to_str())
+        .expect("Invalid or missing parent directory name");
+
+    match parent.split_once('-') {
+        Some((_prefix, middle)) => middle.to_string(),
+        None => parent.to_string(),
+    }
+}
+
 fn process_tree_element(
     tree: &TreeElement,
     outputs: &HashMap<&&PathBuf, PandocOutput>,
@@ -110,6 +124,22 @@ fn process_tree_element(
     match tree {
         TreeElement::File(path) => {
             let name = get_name(path);
+            let content = match outputs.get(&path).unwrap() {
+                PandocOutput::ToBuffer(output) => output,
+                _ => panic!("Pandoc didn't output to pipe?"),
+            };
+
+            quote! {
+                ContentTree::Html {
+                    name: #name,
+                    content: #content,
+                    route: #route
+                }
+            }
+        }
+
+        TreeElement::ModFile(path) => {
+            let name = get_mod_name(path);
             let content = match outputs.get(&path).unwrap() {
                 PandocOutput::ToBuffer(output) => output,
                 _ => panic!("Pandoc didn't output to pipe?"),

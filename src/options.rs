@@ -171,6 +171,7 @@ mod keywords {
     custom_keyword!(path);
     custom_keyword!(ty);
     custom_keyword!(route);
+    custom_keyword!(source_ext);
     custom_keyword!(input_format);
     custom_keyword!(output_format);
 }
@@ -238,6 +239,7 @@ pub(crate) struct Options {
     pub mod_name: Ident,
     pub tree_name: Ident,
     pub content: Punctuated<Element, Token![,]>,
+    pub source_ext: Option<String>,
     pub input_format: Option<(InputFormat, Vec<MarkdownExtension>)>,
     pub output_format: Option<(OutputFormat, Vec<MarkdownExtension>)>,
     pub pandoc_options: Vec<PandocOption>,
@@ -252,6 +254,7 @@ impl Parse for Options {
         let mut content: Option<Punctuated<Element, Token![,]>> = None;
         let mut input_format: Option<(InputFormat, Vec<MarkdownExtension>)> = None;
         let mut output_format: Option<(OutputFormat, Vec<MarkdownExtension>)> = None;
+        let mut source_ext: Option<String> = None;
         let mut pandoc_options: Option<Vec<PandocOption>> = None;
         let mut nproc: Option<usize> = None;
 
@@ -291,6 +294,25 @@ impl Parse for Options {
                 let elements_stream;
                 bracketed!(elements_stream in input);
                 content = Some(Punctuated::parse_separated_nonempty(&elements_stream)?);
+            } else if lookahead.peek(keywords::source_ext) {
+                if source_ext.is_some() {
+                    return Err(syn::Error::new(
+                        Span::call_site(),
+                        "source_ext specified multiple times",
+                    ));
+                }
+                let _ = input.parse::<keywords::source_ext>()?;
+                let _ = input.parse::<Token![=]>()?;
+                let expr = input.parse::<ExprLit>()?;
+                match expr.lit {
+                    Lit::Str(s) => source_ext = Some(s.value()),
+                    _ => {
+                        return Err(syn::Error::new(
+                            Span::call_site(),
+                            "source_ext argument should be a string literal",
+                        ));
+                    }
+                }
             } else if lookahead.peek(keywords::input_format) {
                 if input_format.is_some() {
                     return Err(syn::Error::new(
@@ -359,6 +381,7 @@ impl Parse for Options {
             mod_name,
             tree_name,
             content,
+            source_ext,
             input_format,
             output_format,
             pandoc_options: pandoc_options.unwrap_or_default(),
