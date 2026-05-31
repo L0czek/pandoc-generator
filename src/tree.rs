@@ -56,6 +56,28 @@ impl FsTree {
         }
     }
 
+    fn parse_order(path_str: &str) -> u32 {
+        // Extract the first component (directory/file name)
+        let name = path_str;
+
+        // Find the end of the number part (leading digits)
+        let num_str = name
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .collect::<String>();
+
+        if !num_str.is_empty() {
+            // Check if followed by '-'
+            if name.chars().nth(num_str.len()) == Some('-') {
+                // Valid "<number>-" prefix found
+                return num_str.parse::<u32>().unwrap_or(0);
+            }
+        }
+
+        // No numeric prefix found - use max value to sort after numbered items
+        u32::MAX
+    }
+
     fn make_tree(dir: &PathBuf, mod_file_name: &str, source_ext: &Option<String>) -> Result<Vec<TreeElement>, io::Error> {
         let mut components = Vec::new();
 
@@ -94,8 +116,9 @@ impl FsTree {
             };
 
             let index = path.iter().last().unwrap().to_str().unwrap();
+            let order = Self::parse_order(&index);
 
-            index.to_owned()
+            (order, index.to_owned())
         });
 
         Ok(components)
@@ -472,6 +495,115 @@ mod tests {
                     other => panic!("expected File, got {:?}", name_of(other)),
                 }).collect();
                 assert_eq!(names, vec!["a.md", "m.md", "z.md"]);
+            }
+            other => panic!("expected Nested, got {:?}", name_of(other)),
+        }
+    }
+
+    #[test]
+    fn components_are_sorted_by_numeric_prefix() {
+        let tmp = TempDir::new("tree_numeric_sort");
+        write_file(tmp.path(), "z.md", "z");
+        let sub1 = create_dir(tmp.path(), "02-second");
+        write_file(&sub1, "content.md", "c2");
+        let sub3 = create_dir(tmp.path(), "01-first");
+        write_file(&sub3, "content.md", "c1");
+        let sub4 = create_dir(tmp.path(), "03-third");
+        write_file(&sub4, "content.md", "c3");
+
+        let tree = FsTree::construct(tmp.path().clone(), &None, "__mod__.md", &None).unwrap();
+        match &tree.tree {
+            TreeElement::Nested(_, components) => {
+                let names: Vec<&str> = components.iter().map(|c| match c {
+                    TreeElement::Nested(p, _) => p.file_name().unwrap().to_str().unwrap(),
+                    TreeElement::File(p) => p.file_name().unwrap().to_str().unwrap(),
+                    other => panic!("expected Nested/File, got {:?}", name_of(other)),
+                }).collect();
+                // Should be ordered by numeric prefix: 01-first, 02-second, 03-third, z.md
+                assert_eq!(names, vec!["01-first", "02-second", "03-third", "z.md"]);
+            }
+            other => panic!("expected Nested, got {:?}", name_of(other)),
+        }
+    }
+
+    #[test]
+    fn components_with_numeric_prefix_mixed_with_non_numeric() {
+        let tmp = TempDir::new("tree_mixed_sort");
+        let sub_no_num = create_dir(tmp.path(), "no_prefix");
+        write_file(&sub_no_num, "a.md", "a");
+        let sub_02 = create_dir(tmp.path(), "02-with-num");
+        write_file(&sub_02, "b.md", "b");
+        let sub_01 = create_dir(tmp.path(), "01-with-num");
+        write_file(&sub_01, "c.md", "c");
+
+        let tree = FsTree::construct(tmp.path().clone(), &None, "__mod__.md", &None).unwrap();
+        match &tree.tree {
+            TreeElement::Nested(_, components) => {
+                let names: Vec<&str> = components.iter().map(|c| match c {
+                    TreeElement::Nested(p, _) => p.file_name().unwrap().to_str().unwrap(),
+                    other => panic!("expected Nested, got {:?}", name_of(other)),
+                }).collect();
+                // Numeric prefixes come first, then non-prefixed alphabetically
+                assert_eq!(names, vec!["01-with-num", "02-with-num", "no_prefix"]);
+            }
+            other => panic!("expected Nested, got {:?}", name_of(other)),
+        }
+    }
+
+    #[test]
+    fn non_sequential_numeric_prefixes_sort_correctly() {
+        let tmp = TempDir::new("tree_nonseq_sort");
+        // Create directories with gaps in numbering: 2-a, 3-b, 1-c, and non-prefixed
+        let sub_2a = create_dir(tmp.path(), "2-a");
+        write_file(&sub_2a, "x.md", "a");
+        let sub_3b = create_dir(tmp.path(), "3-b");
+        write_file(&sub_3b, "x.md", "b");
+        let sub_1c = create_dir(tmp.path(), "1-c");
+        write_file(&sub_1c, "x.md", "c");
+        let sub_no_num = create_dir(tmp.path(), "unordered");
+        write_file(&sub_no_num, "x.md", "u");
+
+        let tree = FsTree::construct(tmp.path().clone(), &None, "__mod__.md", &None).unwrap();
+        match &tree.tree {
+            TreeElement::Nested(_, components) => {
+                let names: Vec<&str> = components.iter().map(|c| match c {
+                    TreeElement::Nested(p, _) => p.file_name().unwrap().to_str().unwrap(),
+                    TreeElement::File(p) => p.file_name().unwrap().to_str().unwrap(),
+                    other => panic!("expected Nested/File, got {:?}", name_of(other)),
+                }).collect();
+                // Should sort by numeric prefix regardless of gaps: 1-c, 2-a, 3-b, unordered
+                assert_eq!(names, vec!["1-c", "2-a", "3-b", "unordered"]);
+            }
+            other => panic!("expected Nested, got {:?}", name_of(other)),
+        }
+    }
+
+    #[test]
+    fn numeric_prefix_edge_cases() {
+        let tmp = TempDir::new("tree_edge_cases");
+        // Test edge cases:
+        // - 001-leading-zeros (should parse as 1)
+        // - 5-no-trailing-dash (DOES match - has dash after 5, sorts as 5)
+        // - -no-leading-num (should NOT match - no number)
+        // - 10-larger-number (should parse as 10)
+        let sub_001 = create_dir(tmp.path(), "001-leading-zeros");
+        write_file(&sub_001, "x.md", "a");
+        let sub_no_dash = create_dir(tmp.path(), "5-no-trailing-dash");
+        write_file(&sub_no_dash, "x.md", "b");
+        let sub_no_num = create_dir(tmp.path(), "-no-leading-num");
+        write_file(&sub_no_num, "x.md", "c");
+        let sub_10 = create_dir(tmp.path(), "10-larger-number");
+        write_file(&sub_10, "x.md", "d");
+
+        let tree = FsTree::construct(tmp.path().clone(), &None, "__mod__.md", &None).unwrap();
+        match &tree.tree {
+            TreeElement::Nested(_, components) => {
+                let names: Vec<&str> = components.iter().map(|c| match c {
+                    TreeElement::Nested(p, _) => p.file_name().unwrap().to_str().unwrap(),
+                    other => panic!("expected Nested, got {:?}", name_of(other)),
+                }).collect();
+                // Sorted by numeric prefix: 001-leading-zeros (1), 5-no-trailing-dash (5), 10-larger-number (10), -no-leading-num (u32::MAX)
+                assert_eq!(names, vec!["001-leading-zeros", "5-no-trailing-dash", "10-larger-number", "-no-leading-num"]);
             }
             other => panic!("expected Nested, got {:?}", name_of(other)),
         }
